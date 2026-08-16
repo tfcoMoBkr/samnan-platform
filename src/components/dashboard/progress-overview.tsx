@@ -1,9 +1,11 @@
 import { Wallet, Layers, TrendingUp, ArrowDownCircle, Clock } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { cn } from '@/lib/utils'
+import Link from 'next/link'
+import { BILLING_STATES, BILLING_LABELS, BILLING_CHIP, matchesBilling } from '@/lib/billing'
 import type { Project } from '@/types/database'
 
-export interface PaymentLite { project_id: string; amount: number; paid_amount: number; status: string }
+export interface PaymentLite { project_id: string; amount: number; paid_amount: number; status: string; billing_status?: string | null }
 export interface MaterialLite { project_id: string; status: string }
 export interface InstallationLite { project_id: string; status: string }
 
@@ -106,6 +108,30 @@ export function ProgressOverview({ projects, payments, materials, installations,
             <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-50 border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600">
               <span className="h-1.5 w-1.5 rounded-full bg-gray-400" /> {pendingCount} معلّقة
             </span>
+          </div>
+        )}
+
+        {/* Invoicing / collection breakdown — each chip opens the projects
+            list already filtered to that state. */}
+        {BILLING_STATES.some((st) => scopedPayments.some((p) => matchesBilling(p.billing_status, st))) && (
+          <div className="mt-2.5 border-t border-gray-50 pt-2.5">
+            <p className="mb-1.5 text-[11px] font-semibold text-gray-400">حالة الفوترة والتحصيل</p>
+            <div className="flex flex-wrap items-center gap-2">
+              {BILLING_STATES.map((state) => {
+                const matched = scopedPayments.filter((p) => matchesBilling(p.billing_status, state))
+                if (matched.length === 0) return null
+                const sum = matched.reduce((t, p) => t + (p.paid_amount ?? 0), 0)
+                return (
+                  <Link key={state} href={`/projects?billing=${state}`}
+                    className={cn('inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-opacity hover:opacity-80',
+                      BILLING_CHIP[state])}>
+                    {BILLING_LABELS[state]}
+                    <span className="font-bold">{matched.length}</span>
+                    <span className="opacity-70">· {formatCurrency(sum)}</span>
+                  </Link>
+                )
+              })}
+            </div>
           </div>
         )}
 

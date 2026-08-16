@@ -12,7 +12,12 @@ import { PaymentStatusBadge } from '@/components/shared/status-badge'
 import { EmptyState } from '@/components/shared/empty-state'
 import { createPayment, recordPayment, deletePayment, editPayment, setSalesConfirmation } from '@/lib/actions/payments'
 import { savePaymentAttachment, deleteAttachment, deletePaymentReceipt } from '@/lib/actions/attachments'
+import { cn } from '@/lib/utils'
 import { uploadFileDirect } from '@/lib/upload-client'
+import {
+  BILLING_STATES, BILLING_LABELS, BILLING_CHIP, BILLING_CHIP_ACTIVE,
+  matchesBilling, type BillingState,
+} from '@/lib/billing'
 import { LETTERHEAD_CSS, letterheadOpenHtml, letterheadCloseHtml } from '@/lib/print-letterhead'
 import { formatCurrency, formatDateShort, isOverdue } from '@/lib/utils'
 import { PAYMENT_TYPE_LABELS, PAYMENT_STATUS_LABELS } from '@/lib/constants'
@@ -39,17 +44,6 @@ function toDateInputValue(raw: string | null | undefined): string {
   return ''
 }
 
-// Invoicing/collection state — picked while recording a payment
-const BILLING_LABELS: Record<string, string> = {
-  collected: 'تم التحصيل',
-  invoiced: 'تم الفوترة',
-  both: 'تم التحصيل والفوترة',
-}
-const BILLING_CHIP: Record<string, string> = {
-  collected: 'bg-emerald-50 text-emerald-700 border-emerald-100',
-  invoiced: 'bg-blue-50 text-blue-700 border-blue-100',
-  both: 'bg-purple-50 text-purple-700 border-purple-100',
-}
 
 // LC maturity = pay date + tenor (days)
 function lcMaturity(date: string, days: number): string {
@@ -73,6 +67,8 @@ interface PaymentsTabProps {
 }
 
 export function PaymentsTab({ payments, projectId, canManage, projectTotal, attachments = [], canConfirmSales = false, hasInstallation = true, canPrintInvoice = false, projectName, clientName }: PaymentsTabProps) {
+  // Invoicing/collection filter — null shows every payment
+  const [billingFilter, setBillingFilter] = useState<BillingState | null>(null)
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [addType, setAddType] = useState('')
   const [addLc, setAddLc] = useState(false)
@@ -371,6 +367,9 @@ export function PaymentsTab({ payments, projectId, canManage, projectTotal, atta
     setInvoicePaymentId(null)
   }
 
+  const shownPayments = billingFilter
+    ? payments.filter((p) => matchesBilling(p.billing_status, billingFilter))
+    : payments
   const activePayments = payments.filter((p) => p.status !== 'cancelled')
   const totalAmount = activePayments.reduce((s, p) => s + (p.amount ?? 0), 0)
   const totalPaid = activePayments.reduce((s, p) => s + (p.paid_amount ?? 0), 0)
@@ -418,11 +417,37 @@ export function PaymentsTab({ payments, projectId, canManage, projectTotal, atta
         </div>
       )}
 
+      {/* ── Invoicing / collection filter ── */}
+      {payments.some((p) => p.billing_status) && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold text-gray-500">حالة الفوترة والتحصيل:</span>
+          <button onClick={() => setBillingFilter(null)}
+            className={cn('rounded-full border px-3 py-1 text-xs font-semibold transition-all',
+              billingFilter === null ? 'bg-brand-600 border-brand-600 text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300')}>
+            الكل <span className="opacity-70">{payments.length}</span>
+          </button>
+          {BILLING_STATES.map((state) => {
+            const count = payments.filter((p) => matchesBilling(p.billing_status, state)).length
+            if (count === 0) return null
+            const active = billingFilter === state
+            return (
+              <button key={state} onClick={() => setBillingFilter(active ? null : state)}
+                className={cn('rounded-full border px-3 py-1 text-xs font-semibold transition-all',
+                  active ? BILLING_CHIP_ACTIVE[state] : `${BILLING_CHIP[state]} hover:opacity-80`)}>
+                {BILLING_LABELS[state]} <span className="opacity-70">{count}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+
       {payments.length === 0 ? (
         <EmptyState message="لا توجد دفعات مضافة" description="أضف جدول الدفعات للمشروع" icon={<CreditCard className="h-8 w-8 text-gray-400" />} />
+      ) : shownPayments.length === 0 ? (
+        <EmptyState message="لا توجد دفعات بهذه الحالة" description="جرّب حالة أخرى أو اعرض الكل" icon={<CreditCard className="h-8 w-8 text-gray-400" />} />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {payments.map((payment, idx) => {
+          {shownPayments.map((payment, idx) => {
             const overdue = isOverdue(payment.due_date, payment.status)
             const displayStatus = overdue && payment.status === 'pending' ? 'overdue' : payment.status
             const paidPct = payment.amount > 0 ? Math.min(100, Math.round((payment.paid_amount / payment.amount) * 100)) : 0

@@ -10,31 +10,47 @@ import { PageHeader } from '@/components/shared/page-header'
 import { ProjectsList, type ProjectProgress } from '@/components/projects/projects-list'
 import type { QueryResultMany } from '@/lib/supabase/typed'
 import { materialsPercent } from '@/lib/config'
+import { isBillingState } from '@/lib/billing'
 
 const REQ_STAGE_KEYS = INSTALL_STAGES.filter((s) => !s.optional).map((s) => s.key)
 
-export default async function ProjectsPage() {
+export default async function ProjectsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ billing?: string }>
+}) {
+  // Deep-link from the dashboard's billing chips: /projects?billing=collected
+  const { billing: billingParam } = await searchParams
   const [projects, profile] = await Promise.all([getProjects(), getCurrentProfile()])
   if (!profile) return null
 
   // ── Per-project completion percentages (collection / materials / installation) ──
   const service = createServiceClient()
   const [paysRes, matsRes, instRes] = await Promise.all([
-    service.from('payments').select('project_id, amount, paid_amount, status'),
+    service.from('payments').select('project_id, amount, paid_amount, status, billing_status'),
     service.from('materials').select('project_id, status, requested_at').order('requested_at', { ascending: false }),
     service.from('installations').select('project_id, stages, created_at').order('created_at', { ascending: false }),
   ]) as unknown as [
-    { data: { project_id: string; amount: number; paid_amount: number; status: string }[] | null },
+    { data: { project_id: string; amount: number; paid_amount: number; status: string; billing_status: string | null }[] | null },
     { data: { project_id: string; status: string }[] | null },
     { data: { project_id: string; stages: Record<string, { done?: boolean }> | null }[] | null },
   ]
 
   const payAgg = new Map<string, { paid: number; amount: number }>()
+  // Which invoicing/collection states a project's payments carry — drives the
+  // billing filter on the list. "both" also satisfies collected and invoiced.
+  const billingByProj = new Map<string, Set<string>>()
   for (const p of paysRes.data ?? []) {
     if (p.status === 'cancelled') continue
     const a = payAgg.get(p.project_id) ?? { paid: 0, amount: 0 }
     a.paid += p.paid_amount ?? 0; a.amount += p.amount ?? 0
     payAgg.set(p.project_id, a)
+    if (p.billing_status) {
+      const set = billingByProj.get(p.project_id) ?? new Set<string>()
+      set.add(p.billing_status)
+      if (p.billing_status === 'both') { set.add('collected'); set.add('invoiced') }
+      billingByProj.set(p.project_id, set)
+    }
   }
   const matByProj = new Map<string, { status: string }>()
   for (const m of matsRes.data ?? []) if (!matByProj.has(m.project_id)) matByProj.set(m.project_id, m)
@@ -67,6 +83,9 @@ export default async function ProjectsPage() {
     const overall = round(parts.reduce((a, b) => a + b, 0) / parts.length)
     progress[proj.id] = { overall, collection, materials, installation }
   }
+
+  const billing: Record<string, string[]> = {}
+  for (const [id, set] of billingByProj) billing[id] = [...set]
 
   // Sales engineers are view-only; coordinators (operational managers) and admin create projects
   const canCreate = ['coordinator', 'admin'].includes(profile.role)
@@ -118,6 +137,8 @@ export default async function ProjectsPage() {
         currentProfile={profile}
         canCreate={canCreate}
         progress={progress}
+        billing={billing}
+        initialBilling={isBillingState(billingParam) ? billingParam : null}
       />
     </div>
   )

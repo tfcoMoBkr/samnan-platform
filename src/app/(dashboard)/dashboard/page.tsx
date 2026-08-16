@@ -30,7 +30,7 @@ export default async function DashboardPage() {
 
   // Lightweight aggregates for the progress ratios (collection / materials)
   const paymentsResult = (await supabase
-    .from('payments').select('project_id, amount, paid_amount, status')) as QueryResultMany<PaymentLite>
+    .from('payments').select('project_id, amount, paid_amount, status, billing_status')) as QueryResultMany<PaymentLite>
   const materialsResult = (await supabase
     .from('materials').select('project_id, status')) as QueryResultMany<MaterialLite>
   const paymentsLite = paymentsResult.data ?? []

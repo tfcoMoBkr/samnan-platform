@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import {
   Plus, FolderOpen, Building2, Calendar, DollarSign, ChevronLeft,
-  Search, MapPin, Users, ChevronDown, X, Check,
+  Search, MapPin, Users, ChevronDown, X, Check, Receipt,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ProjectStatusBadge } from '@/components/shared/status-badge'
@@ -12,6 +12,9 @@ import { EmptyState } from '@/components/shared/empty-state'
 import { formatCurrency, formatDateShort } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import { STATUS_LABELS } from '@/lib/constants'
+import {
+  BILLING_STATES, BILLING_LABELS, BILLING_CHIP, BILLING_CHIP_ACTIVE, type BillingState,
+} from '@/lib/billing'
 import type { Project, Profile, ProjectStatus } from '@/types/database'
 
 export interface ProjectProgress {
@@ -27,6 +30,10 @@ interface ProjectsListProps {
   currentProfile: Profile
   canCreate: boolean
   progress?: Record<string, ProjectProgress>
+  /** invoicing/collection states present on each project's payments */
+  billing?: Record<string, string[]>
+  /** preselected billing filter, e.g. arriving from a dashboard chip */
+  initialBilling?: BillingState | null
 }
 
 type View = 'mine' | 'all'
@@ -43,13 +50,14 @@ function projectTeam(p: Project) {
   return [p.coordinator, p.sales_engineer, p.installation_person].filter(Boolean) as Profile[]
 }
 
-export function ProjectsList({ projects, myProjectIds, currentProfile, canCreate, progress }: ProjectsListProps) {
+export function ProjectsList({ projects, myProjectIds, currentProfile, canCreate, progress, billing, initialBilling = null }: ProjectsListProps) {
   const isAdmin = currentProfile.role === 'admin'
   const [view, setView] = useState<View>('mine')
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | 'all'>('all')
   const [search, setSearch] = useState('')
   const [selectedCities, setSelectedCities] = useState<string[]>([])
   const [selectedPeople, setSelectedPeople] = useState<string[]>([])
+  const [billingFilter, setBillingFilter] = useState<BillingState | null>(initialBilling)
   // User-controlled count: a number shows that many; 'all' shows everything.
   const [limit, setLimit] = useState<number | 'all'>(12)
 
@@ -78,6 +86,8 @@ export function ProjectsList({ projects, myProjectIds, currentProfile, canCreate
 
       if (selectedCities.length > 0 && !(p.location && selectedCities.includes(p.location.trim()))) return false
 
+      if (billingFilter && !(billing?.[p.id] ?? []).includes(billingFilter)) return false
+
       if (selectedPeople.length > 0) {
         const teamIds = projectTeam(p).map((m) => m.id)
         if (!selectedPeople.some((id) => teamIds.includes(id))) return false
@@ -92,19 +102,20 @@ export function ProjectsList({ projects, myProjectIds, currentProfile, canCreate
       }
       return true
     })
-  }, [baseList, statusFilter, selectedCities, selectedPeople, search])
+  }, [baseList, statusFilter, selectedCities, selectedPeople, search, billingFilter, billing])
 
   // User-controlled number of projects shown
   const paged = limit === 'all' ? displayed : displayed.slice(0, limit)
 
   const myCount = myProjects.length
   const allCount = projects.length
-  const hasActiveFilters = search.trim() !== '' || selectedCities.length > 0 || selectedPeople.length > 0
+  const hasActiveFilters = search.trim() !== '' || selectedCities.length > 0 || selectedPeople.length > 0 || billingFilter !== null
 
   function clearAll() {
     setSearch('')
     setSelectedCities([])
     setSelectedPeople([])
+    setBillingFilter(null)
   }
 
   return (
@@ -194,6 +205,10 @@ export function ProjectsList({ projects, myProjectIds, currentProfile, canCreate
               <FilterChip label={`"${search.trim()}"`} icon={<Search className="h-3 w-3" />}
                 onRemove={() => setSearch('')} />
             )}
+            {billingFilter && (
+              <FilterChip label={BILLING_LABELS[billingFilter]} icon={<Receipt className="h-3 w-3" />}
+                onRemove={() => setBillingFilter(null)} />
+            )}
             <button onClick={clearAll}
               className="ms-auto text-xs font-medium text-red-500 hover:text-red-600 hover:underline">
               مسح الكل
@@ -201,6 +216,25 @@ export function ProjectsList({ projects, myProjectIds, currentProfile, canCreate
           </div>
         )}
       </div>
+
+      {/* Invoicing / collection filter — only when some project actually has one */}
+      {billing && Object.keys(billing).length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-gray-400">حالة الفوترة والتحصيل:</span>
+          {BILLING_STATES.map((state) => {
+            const count = baseList.filter((p) => (billing[p.id] ?? []).includes(state)).length
+            if (count === 0) return null
+            const active = billingFilter === state
+            return (
+              <button key={state} onClick={() => setBillingFilter(active ? null : state)}
+                className={cn('rounded-full border px-3 py-1 text-xs font-semibold transition-all',
+                  active ? BILLING_CHIP_ACTIVE[state] : `${BILLING_CHIP[state]} hover:opacity-80`)}>
+                {BILLING_LABELS[state]} <span className="opacity-70">{count}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {/* Status filter */}
       <div className="flex flex-wrap gap-2">
