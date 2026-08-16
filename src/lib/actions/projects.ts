@@ -51,23 +51,50 @@ export async function getProjects(filters?: { status?: ProjectStatus; search?: s
 }
 
 export async function getProject(id: string) {
-  // Any signed-in staff member may read a project's header row (name, client,
-  // status, assigned team). The screen needs it to render the "ما عندك صلاحية"
-  // notice — gating it here turned that designed notice into a raw 404 for
-  // every installation manager opening a colleague's project.
-  //
-  // The data that actually matters is protected one level down: payments,
-  // materials, custody, notes, attachments and installations each enforce
-  // requireProjectAccess and return nothing to an unassigned user.
   const guard = await requireAuth()
   if ('error' in guard) return null
+
+  // Read through the USER's client so row-level security makes the access
+  // decision. A row comes back only for a manager, the assigned sales
+  // engineer, or the assigned installation manager.
   const supabase = await createClient()
   const result = (await supabase
     .from('projects')
     .select('*, coordinator:profiles!coordinator_id(id,full_name,role), sales_engineer:profiles!sales_engineer_id(id,full_name,role), installation_person:profiles!installation_id(id,full_name,role)')
     .eq('id', id)
     .single()) as QueryResult<Project>
-  return result.data
+  if (result.data) return result.data
+
+  // No access. Staff are shown that colleagues' projects EXIST (the
+  // installation hub lists them by design), so returning null here turned
+  // every such click into a raw 404. Instead hand back a redacted header —
+  // just enough for the "ما عندك صلاحية" notice to name the project and its
+  // manager. Every financial and client field is deliberately blanked, so
+  // nothing sensitive reaches the browser payload.
+  const service = createServiceClient()
+  const minimal = (await service
+    .from('projects')
+    .select('id, project_name, status, has_installation, coordinator_id, sales_engineer_id, installation_id, sales_engineer:profiles!sales_engineer_id(id,full_name,role), installation_person:profiles!installation_id(id,full_name,role)')
+    .eq('id', id)
+    .single()) as unknown as { data: Partial<Project> | null }
+  if (!minimal.data) return null
+
+  return {
+    ...minimal.data,
+    client_name: '',
+    location: null,
+    customer_account_no: null,
+    total_amount: null,
+    start_date: null,
+    expected_end_date: null,
+    contract_url: null,
+    cr_url: null,
+    vat_url: null,
+    national_address_url: null,
+    public_token: null,
+    cancellation_reason: null,
+    coordinator: null,
+  } as unknown as Project
 }
 
 export async function createProject(formData: FormData) {
