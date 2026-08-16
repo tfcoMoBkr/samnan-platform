@@ -1392,6 +1392,7 @@ export const AR_PHRASES: Record<string, string> = {
   'حالة الفوترة والتحصيل:': 'Billing & collection status:',
   'لا توجد دفعات بهذه الحالة': 'No payments with this status',
   'جرّب حالة أخرى أو اعرض الكل': 'Try another status or show all',
+  'عرض الكل': 'Show all',
   'حالة الصنف': 'Item status',
   'قيد الإجراء': 'In progress',
   'لم يطلب': 'Not requested',

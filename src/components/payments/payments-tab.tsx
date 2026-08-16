@@ -417,8 +417,11 @@ export function PaymentsTab({ payments, projectId, canManage, projectTotal, atta
         </div>
       )}
 
-      {/* ── Invoicing / collection filter ── */}
-      {payments.some((p) => p.billing_status) && (
+      {/* ── Invoicing / collection filter ──
+          Always visible, and every state is always listed even at zero, so the
+          filter is a stable part of the screen rather than something that
+          appears and disappears depending on the data. */}
+      {payments.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-semibold text-gray-500">حالة الفوترة والتحصيل:</span>
           <button onClick={() => setBillingFilter(null)}
@@ -428,12 +431,13 @@ export function PaymentsTab({ payments, projectId, canManage, projectTotal, atta
           </button>
           {BILLING_STATES.map((state) => {
             const count = payments.filter((p) => matchesBilling(p.billing_status, state)).length
-            if (count === 0) return null
             const active = billingFilter === state
             return (
               <button key={state} onClick={() => setBillingFilter(active ? null : state)}
                 className={cn('rounded-full border px-3 py-1 text-xs font-semibold transition-all',
-                  active ? BILLING_CHIP_ACTIVE[state] : `${BILLING_CHIP[state]} hover:opacity-80`)}>
+                  active ? BILLING_CHIP_ACTIVE[state]
+                    : count === 0 ? 'bg-gray-50 border-gray-200 text-gray-400 hover:border-gray-300'
+                    : `${BILLING_CHIP[state]} hover:opacity-80`)}>
                 {BILLING_LABELS[state]} <span className="opacity-70">{count}</span>
               </button>
             )
@@ -444,7 +448,7 @@ export function PaymentsTab({ payments, projectId, canManage, projectTotal, atta
       {payments.length === 0 ? (
         <EmptyState message="لا توجد دفعات مضافة" description="أضف جدول الدفعات للمشروع" icon={<CreditCard className="h-8 w-8 text-gray-400" />} />
       ) : shownPayments.length === 0 ? (
-        <EmptyState message="لا توجد دفعات بهذه الحالة" description="جرّب حالة أخرى أو اعرض الكل" icon={<CreditCard className="h-8 w-8 text-gray-400" />} />
+        <EmptyState message="لا يوجد" description={`لا توجد دفعات بحالة «${BILLING_LABELS[billingFilter!] ?? ''}»`} icon={<CreditCard className="h-8 w-8 text-gray-400" />} />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {shownPayments.map((payment, idx) => {

@@ -217,24 +217,24 @@ export function ProjectsList({ projects, myProjectIds, currentProfile, canCreate
         )}
       </div>
 
-      {/* Invoicing / collection filter — only when some project actually has one */}
-      {billing && Object.keys(billing).length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-medium text-gray-400">حالة الفوترة والتحصيل:</span>
-          {BILLING_STATES.map((state) => {
-            const count = baseList.filter((p) => (billing[p.id] ?? []).includes(state)).length
-            if (count === 0) return null
-            const active = billingFilter === state
-            return (
-              <button key={state} onClick={() => setBillingFilter(active ? null : state)}
-                className={cn('rounded-full border px-3 py-1 text-xs font-semibold transition-all',
-                  active ? BILLING_CHIP_ACTIVE[state] : `${BILLING_CHIP[state]} hover:opacity-80`)}>
-                {BILLING_LABELS[state]} <span className="opacity-70">{count}</span>
-              </button>
-            )
-          })}
-        </div>
-      )}
+      {/* Invoicing / collection filter — permanently visible, all states shown
+          even at zero so the row never shifts around under the user. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium text-gray-400">حالة الفوترة والتحصيل:</span>
+        {BILLING_STATES.map((state) => {
+          const count = baseList.filter((p) => (billing?.[p.id] ?? []).includes(state)).length
+          const active = billingFilter === state
+          return (
+            <button key={state} onClick={() => setBillingFilter(active ? null : state)}
+              className={cn('rounded-full border px-3 py-1 text-xs font-semibold transition-all',
+                active ? BILLING_CHIP_ACTIVE[state]
+                  : count === 0 ? 'bg-gray-50 border-gray-200 text-gray-400 hover:border-gray-300'
+                  : `${BILLING_CHIP[state]} hover:opacity-80`)}>
+              {BILLING_LABELS[state]} <span className="opacity-70">{count}</span>
+            </button>
+          )
+        })}
+      </div>
 
       {/* Status filter */}
       <div className="flex flex-wrap gap-2">
@@ -300,7 +300,17 @@ export function ProjectsList({ projects, myProjectIds, currentProfile, canCreate
 
       {/* Cards grid */}
       {displayed.length === 0 ? (
-        hasActiveFilters ? (
+        // A billing filter that matches nothing gets its own plain message —
+        // "لا يوجد" reads better than a generic no-results screen when the user
+        // deliberately asked for one invoicing state.
+        billingFilter ? (
+          <EmptyState
+            message="لا يوجد"
+            description={`لا توجد مشاريع بحالة «${BILLING_LABELS[billingFilter]}»`}
+            icon={<Receipt className="h-8 w-8 text-gray-400" />}
+            action={<Button variant="outline" size="sm" onClick={() => setBillingFilter(null)}>عرض الكل</Button>}
+          />
+        ) : hasActiveFilters ? (
           <EmptyState
             message="لا توجد نتائج مطابقة"
             description="جرّب تعديل كلمات البحث أو الفلاتر"
