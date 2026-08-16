@@ -51,7 +51,15 @@ export async function getProjects(filters?: { status?: ProjectStatus; search?: s
 }
 
 export async function getProject(id: string) {
-  const guard = await requireProjectAccess(id)
+  // Any signed-in staff member may read a project's header row (name, client,
+  // status, assigned team). The screen needs it to render the "ما عندك صلاحية"
+  // notice — gating it here turned that designed notice into a raw 404 for
+  // every installation manager opening a colleague's project.
+  //
+  // The data that actually matters is protected one level down: payments,
+  // materials, custody, notes, attachments and installations each enforce
+  // requireProjectAccess and return nothing to an unassigned user.
+  const guard = await requireAuth()
   if ('error' in guard) return null
   const supabase = await createClient()
   const result = (await supabase

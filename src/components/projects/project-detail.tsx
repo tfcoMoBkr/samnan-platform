@@ -340,6 +340,38 @@ export function ProjectDetail({
     })
   }
 
+  // A sales engineer opening a project that isn't theirs: same treatment the
+  // installation role already had. Without this they landed on the full layout
+  // with every tab empty (the server refuses them the data), which reads as a
+  // broken page rather than a permission boundary.
+  if (currentProfile.role === 'sales_engineer' && project.sales_engineer_id !== currentProfile.id) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Link href="/projects">
+            <Button variant="ghost" size="sm" className="gap-1.5 text-gray-500 hover:text-gray-900">
+              <ArrowRight className="h-4 w-4" />
+              المشاريع
+            </Button>
+          </Link>
+        </div>
+        <div className="rounded-2xl border border-gray-100 bg-white p-10 text-center shadow-sm">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-gray-50">
+            <Briefcase className="h-6 w-6 text-gray-400" />
+          </div>
+          <div className="flex items-center justify-center gap-2 mb-1">
+            <h1 data-no-i18n className="text-lg font-bold text-gray-900">{project.project_name}</h1>
+            <ProjectStatusBadge status={project.status} />
+          </div>
+          <p className="text-sm font-semibold text-red-600 mb-1">ما عندك صلاحية للدخول لهذا المشروع</p>
+          <p className="text-sm text-gray-500">
+            المشروع يتابعه {project.sales_engineer?.full_name ?? 'مهندس مبيعات آخر'} — التفاصيل متاحة لمهندسه المعيّن فقط.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   // Installation team sees ONLY the installation part of the project —
   // no payments, materials, attachments, financials or management actions.
   if (currentProfile.role === 'installation') {

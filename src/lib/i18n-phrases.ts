@@ -1393,6 +1393,8 @@ export const AR_PHRASES: Record<string, string> = {
   'لا توجد دفعات بهذه الحالة': 'No payments with this status',
   'جرّب حالة أخرى أو اعرض الكل': 'Try another status or show all',
   'عرض الكل': 'Show all',
+  'مهندس مبيعات آخر': 'another sales engineer',
+  '— التفاصيل متاحة لمهندسه المعيّن فقط.': '— details are available to its assigned engineer only.',
   'حالة الصنف': 'Item status',
   'قيد الإجراء': 'In progress',
   'لم يطلب': 'Not requested',
