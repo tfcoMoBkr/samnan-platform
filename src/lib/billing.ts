@@ -31,13 +31,11 @@ export function isBillingState(v: unknown): v is BillingState {
 }
 
 /**
- * A payment counts toward a state if it carries it exactly, OR if it is
- * marked "both" and the caller asked for one of its halves — «تم التحصيل
- * والفوترة» is by definition also collected and also invoiced, so filtering
- * by «تم التحصيل» must not hide it.
+ * Exact match only. Per the client, the three states are independent buckets:
+ * «تم التحصيل والفوترة» is its own selection and must NOT also appear under
+ * «تم التحصيل» or «تم الفوترة», so each filter shows precisely what was
+ * recorded on the payment and the counts never overlap.
  */
 export function matchesBilling(paymentStatus: string | null | undefined, filter: BillingState): boolean {
-  if (!paymentStatus) return false
-  if (paymentStatus === filter) return true
-  return paymentStatus === 'both' && (filter === 'collected' || filter === 'invoiced')
+  return !!paymentStatus && paymentStatus === filter
 }

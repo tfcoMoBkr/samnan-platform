@@ -38,7 +38,8 @@ export default async function ProjectsPage({
 
   const payAgg = new Map<string, { paid: number; amount: number }>()
   // Which invoicing/collection states a project's payments carry — drives the
-  // billing filter on the list. "both" also satisfies collected and invoiced.
+  // billing filter on the list. States are independent: a payment marked
+  // "both" belongs only to «تم التحصيل والفوترة», never to its halves.
   const billingByProj = new Map<string, Set<string>>()
   for (const p of paysRes.data ?? []) {
     if (p.status === 'cancelled') continue
@@ -48,7 +49,6 @@ export default async function ProjectsPage({
     if (p.billing_status) {
       const set = billingByProj.get(p.project_id) ?? new Set<string>()
       set.add(p.billing_status)
-      if (p.billing_status === 'both') { set.add('collected'); set.add('invoiced') }
       billingByProj.set(p.project_id, set)
     }
   }

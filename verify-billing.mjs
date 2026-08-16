@@ -40,8 +40,7 @@ const projSets = new Map()
 for (const p of live) {
   if (!p.billing_status) continue
   const set = projSets.get(p.project_id) ?? new Set()
-  set.add(p.billing_status)
-  if (p.billing_status === 'both') { set.add('collected'); set.add('invoiced') }
+  set.add(p.billing_status)   // exact match only — states do not overlap
   projSets.set(p.project_id, set)
 }
 const expectProjects = {
@@ -53,6 +52,10 @@ console.log('expected project counts:', JSON.stringify(expectProjects))
 
 // a project that has a billing status, for the payments-tab check
 const targetProjectId = [...projSets.keys()][0]
+// and one WITHOUT any billing status, to prove the filter is still rendered
+const { data: allProjects } = await svc.from('projects').select('id, project_name')
+const payByProj = new Set(live.map(p => p.project_id))
+const noBilling = (allProjects ?? []).find(p => payByProj.has(p.id) && !projSets.has(p.id))
 const { data: targetProj } = await svc.from('projects').select('project_name').eq('id', targetProjectId).single()
 
 const browser = await chromium.launch({ channel: 'chrome' })
@@ -115,6 +118,23 @@ try {
   const after = await page.evaluate(() => document.body.innerText)
   check('clicking a billing chip filters the payment cards', !after.includes('Application error'))
   await page.screenshot({ path: OUT + '/bill-payments.png' })
+
+  // ── 4. Filter is permanent, and empty selection says "لا يوجد" ──
+  if (noBilling) {
+    await page.goto(`${BASE}/projects/${noBilling.id}`, { waitUntil: 'networkidle' })
+    await page.waitForTimeout(2000)
+    const t = await page.evaluate(() => document.body.innerText)
+    check(`filter still shown on a project with no billing data ("${noBilling.project_name}")`,
+      t.includes('حالة الفوترة والتحصيل'))
+    await page.evaluate(() => {
+      const b = [...document.querySelectorAll('button')].find(x => x.textContent.trim().startsWith('تم التحصيل والفوترة'))
+      b?.click()
+    })
+    await page.waitForTimeout(900)
+    const t2 = await page.evaluate(() => document.body.innerText)
+    check('selecting an empty state shows «لا يوجد»', t2.includes('لا يوجد'))
+    await page.screenshot({ path: OUT + '/bill-empty.png' })
+  }
 } finally {
   await browser.close()
   await drop()
