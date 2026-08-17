@@ -16,7 +16,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
     .eq('id', user.id)
     .single()) as QueryResult<Profile>
 
-  if (!result.data) {
+  // The middleware now fails open when the auth service is slow, so this is
+  // the authoritative gate for reaching any dashboard page. It also enforces
+  // deactivation: an admin switching someone off must lock them out on their
+  // next navigation, not only when they try to write something.
+  if (!result.data || result.data.is_active === false) {
     redirect('/login')
   }
 
