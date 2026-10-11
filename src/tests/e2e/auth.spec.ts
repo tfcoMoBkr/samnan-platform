@@ -30,7 +30,8 @@ test.describe('Login page', () => {
     await expect(page.locator('button[type="submit"]')).toContainText('تسجيل الدخول')
   })
 
-  test('shows brand panel on desktop', async ({ page }) => {
+  test('shows brand panel on desktop', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'brand panel is hidden on small screens by design')
     await expect(page.locator('text=منصة الإدارة')).toBeVisible()
   })
 
@@ -38,9 +39,8 @@ test.describe('Login page', () => {
     await page.fill('input[name="email"]', 'invalid@test.com')
     await page.fill('input[name="password"]', 'wrongpassword')
     await page.click('button[type="submit"]')
-    await expect(page.locator('text=البريد الإلكتروني أو كلمة المرور غير صحيحة').or(
-      page.locator('[class*="red"]')
-    )).toBeVisible({ timeout: 8000 })
+    await expect(page.getByText('البريد الإلكتروني أو كلمة المرور غير صحيحة').first())
+      .toBeVisible({ timeout: 8000 })
   })
 
   test('shows error for empty form submission', async ({ page }) => {
@@ -88,11 +88,13 @@ test.describe('Signup page', () => {
     await expect(page.locator('option[value="supply"]')).toHaveCount(0)
   })
 
+  // <option>s inside a closed <select> are never "visible" to Playwright, so
+  // assert presence instead.
   test('offers all valid roles', async ({ page }) => {
-    await expect(page.locator('option[value="coordinator"]')).toBeVisible()
-    await expect(page.locator('option[value="sales_engineer"]')).toBeVisible()
-    await expect(page.locator('option[value="installation"]')).toBeVisible()
-    await expect(page.locator('option[value="admin"]')).toBeVisible()
+    await expect(page.locator('option[value="coordinator"]')).toHaveCount(1)
+    await expect(page.locator('option[value="sales_engineer"]')).toHaveCount(1)
+    await expect(page.locator('option[value="installation"]')).toHaveCount(1)
+    await expect(page.locator('option[value="admin"]')).toHaveCount(1)
   })
 
   test('shows error when passwords do not match', async ({ page }) => {
